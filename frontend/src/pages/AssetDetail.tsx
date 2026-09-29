@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, apiRaw, ApiError, useSession } from "../lib/session";
+import { api, apiRaw, ApiError, useSession, API } from "../lib/session";
 import { BITS, P, TIERS, approvalPolicy, toMask, maskHex, has } from "../lib/permissions";
 import { Tier, BitGrid, BitStrip, Loading, ErrorBox, Empty, Refusal, useAsync } from "../components/ui";
+import { ethers, Contract, BrowserProvider } from "ethers";
 
 type Tab = "overview" | "trace" | "access" | "audit";
 
@@ -179,11 +180,36 @@ function AccessList({ tokenId, classification }: { tokenId: string; classificati
     setSaving(true); setSaveError(null); setSaved(null);
     try {
       const expiresAt = expiry ? Math.floor(new Date(`${expiry}T23:59:59`).getTime() / 1000) : 0;
-      const out = await api<{ txHash: string }>(`/assets/${tokenId}/access`, {
-        method: "POST",
-        body: JSON.stringify({ targetIdentity: target, allowMask: allow, denyMask: deny, expiresAt, reason }),
-      });
-      setSaved(out.txHash);
+      
+      let txHash;
+      if (classification >= 2) {
+        // High clearance requires on-chain proposal via GrantWorkflow
+        const provider = new BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        const configReq = await fetch(API + "/config");
+        const configJson = await configReq.json();
+        
+        const workflow = new Contract(configJson.contracts.GrantWorkflow, [
+          "function proposeGrant(uint256 assetId, bytes32 principal, uint16 allow, uint16 deny, uint64 expiresAt, bytes32 justificationHash, uint256 proposerId) external returns (uint256)"
+        ], signer);
+        
+        // Principal formatting based on backend/contracts logic (PrincipalType.IDENTITY = 1)
+        const principal = ethers.solidityPackedKeccak256(["uint8", "uint256"], [1, target]);
+        const tx = await workflow.proposeGrant(
+          tokenId, principal, allow, deny, expiresAt, ethers.keccak256(ethers.toUtf8Bytes(reason)), session!.identityId
+        );
+        await tx.wait();
+        txHash = tx.hash;
+      } else {
+        // Direct grant for PUBLIC/RESTRICTED via backend relayer
+        const out = await api<{ txHash: string }>(`/assets/${tokenId}/access`, {
+          method: "POST",
+          body: JSON.stringify({ targetIdentity: target, allowMask: allow, denyMask: deny, expiresAt, reason }),
+        });
+        txHash = out.txHash;
+      }
+      
+      setSaved(txHash);
       setReason(""); setExpiry(""); setAllow(0); setDeny(0);
       setRevision((value) => value + 1);
     } catch (e: any) {
@@ -207,7 +233,7 @@ function AccessList({ tokenId, classification }: { tokenId: string; classificati
         </p>
       </section>
 
-      {classification < 2 && session?.roles.includes(1) && (
+      {session?.roles.includes(1) && (
         <section className="panel stack">
           <div className="panel-head">
             <div>
