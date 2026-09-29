@@ -190,13 +190,13 @@ function AccessList({ tokenId, classification }: { tokenId: string; classificati
         const configJson = await configReq.json();
         
         const workflow = new Contract(configJson.contracts.GrantWorkflow, [
-          "function proposeGrant(uint256 assetId, bytes32 principal, uint16 allow, uint16 deny, uint64 expiresAt, bytes32 justificationHash, uint256 proposerId) external returns (uint256)"
+          "function proposeGrant(uint256 assetId, bytes32 principal, uint32 allow, uint32 deny, uint64 expiresAt, uint8 delegationDepth, bytes32 justificationHash, uint256 proposerId) external returns (uint256)"
         ], signer);
         
         // Principal formatting based on backend/contracts logic (PrincipalType.IDENTITY = 1)
         const principal = ethers.solidityPackedKeccak256(["uint8", "uint256"], [1, target]);
         const tx = await workflow.proposeGrant(
-          tokenId, principal, allow, deny, expiresAt, ethers.keccak256(ethers.toUtf8Bytes(reason)), session!.identityId
+          tokenId, principal, allow, deny, expiresAt, 0, ethers.keccak256(ethers.toUtf8Bytes(reason)), session!.identityId
         );
         await tx.wait();
         txHash = tx.hash;
