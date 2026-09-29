@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/components/shell.tsx","./src/components/ui.tsx","./src/lib/permissions.ts","./src/lib/session.tsx","./src/pages/admin.tsx","./src/pages/assetdetail.tsx","./src/pages/explorer.tsx","./src/pages/landing.tsx","./src/pages/riskandproposals.tsx"],"version":"5.9.3"}

@@ -154,8 +154,42 @@ function Trace({ tokenId }: { tokenId: string }) {
 /* ------------------------------------------------------------------ access */
 
 function AccessList({ tokenId, classification }: { tokenId: string; classification: number }) {
-  const { data, error, loading } = useAsync<any[]>(() => api(`/assets/${tokenId}/acl`), [tokenId]);
+  const { session } = useSession();
+  const [revision, setRevision] = useState(0);
+  const { data, error, loading } = useAsync<any[]>(() => api(`/assets/${tokenId}/acl`), [tokenId, revision]);
+  const identities = useAsync<any[]>(() => api("/assets/identities"), []);
+  const [target, setTarget] = useState("");
+  const [allow, setAllow] = useState(0);
+  const [deny, setDeny] = useState(0);
+  const [expiry, setExpiry] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
   const policy = approvalPolicy(classification);
+
+  const toggle = (kind: "allow" | "deny", bit: number) => {
+    const current = kind === "allow" ? allow : deny;
+    const next = current ^ bit;
+    if (kind === "allow") { setAllow(next); setDeny(deny & ~bit); }
+    else { setDeny(next); setAllow(allow & ~bit); }
+  };
+
+  async function save() {
+    setSaving(true); setSaveError(null); setSaved(null);
+    try {
+      const expiresAt = expiry ? Math.floor(new Date(`${expiry}T23:59:59`).getTime() / 1000) : 0;
+      const out = await api<{ txHash: string }>(`/assets/${tokenId}/access`, {
+        method: "POST",
+        body: JSON.stringify({ targetIdentity: target, allowMask: allow, denyMask: deny, expiresAt, reason }),
+      });
+      setSaved(out.txHash);
+      setReason(""); setExpiry(""); setAllow(0); setDeny(0);
+      setRevision((value) => value + 1);
+    } catch (e: any) {
+      setSaveError(e?.detail || e?.code || "The access rule could not be saved.");
+    } finally { setSaving(false); }
+  }
 
   if (loading) return <Loading what="Reading the access list" />;
   if (error) return <ErrorBox error={error} />;
@@ -172,6 +206,70 @@ function AccessList({ tokenId, classification }: { tokenId: string; classificati
           Whoever proposes a grant can never approve it. That rule is in the contract.
         </p>
       </section>
+
+      {classification < 2 && session?.roles.includes(1) && (
+        <section className="panel stack">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Access management</span>
+              <h3 style={{ marginTop: 6 }}>Grant individual permissions</h3>
+            </div>
+            <span className="chip chip-ok mono">Immediate</span>
+          </div>
+          <p className="tiny muted">Choose one identity, set only the permissions they need, and record why the access is justified.</p>
+
+          <label className="stack" style={{ gap: 6 }}>
+            <b className="tiny">Person</b>
+            <select className="btn btn-block" value={target} onChange={(event) => setTarget(event.target.value)} disabled={identities.loading}>
+              <option value="">Select an identity…</option>
+              {identities.data?.filter((item) => item.identityId !== session.identityId && item.active).map((item) => (
+                <option key={item.identityId} value={item.identityId}>
+                  Identity #{item.identityId} · {item.controller.slice(0, 8)}…{item.controller.slice(-4)} · {TIERS[item.clearance]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-2">
+            <div className="stack">
+              <h4>Allow</h4>
+              {BITS.map((permission) => (
+                <label className="spec-row" key={`allow-${permission.bit}`}>
+                  <span><b>{permission.name}</b><small className="muted"> · {permission.desc}</small></span>
+                  <input type="checkbox" checked={(allow & permission.bit) !== 0} onChange={() => toggle("allow", permission.bit)} />
+                </label>
+              ))}
+            </div>
+            <div className="stack">
+              <h4>Deny</h4>
+              {BITS.map((permission) => (
+                <label className="spec-row" key={`deny-${permission.bit}`}>
+                  <span><b>{permission.name}</b><small className="muted"> · overrides any grant</small></span>
+                  <input type="checkbox" checked={(deny & permission.bit) !== 0} onChange={() => toggle("deny", permission.bit)} />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-2">
+            <label className="stack" style={{ gap: 6 }}>
+              <b className="tiny">Expires on <span className="muted">(optional)</span></b>
+              <input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} />
+            </label>
+            <label className="stack" style={{ gap: 6 }}>
+              <b className="tiny">Written reason</b>
+              <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why does this person need access?" />
+            </label>
+          </div>
+
+          <button className="btn btn-primary btn-lg" onClick={save}
+            disabled={saving || !target || (!allow && !deny) || !reason.trim()}>
+            {saving ? "Recording access rule…" : "Save access rule"}
+          </button>
+          {saved && <p className="tiny mono" style={{ color: "var(--green)" }}>Recorded on chain · {saved}</p>}
+          {saveError && <div className="panel panel-alert panel-flat"><p className="tiny">{saveError}</p></div>}
+        </section>
+      )}
 
       <section className="stack">
         <h3>Who has access ({data?.length ?? 0})</h3>
@@ -324,14 +422,23 @@ export default function AssetDetail() {
           <Link className="btn" to="/console">All files</Link>
         </div>
 
-        <div className="stack">
-          <h4>Content hash recorded on chain</h4>
-          <div className="hash">{data.contentHash}</div>
-          <p className="tiny muted">
-            The file is re-hashed on every read and compared with this value. A mismatch
-            stops the transfer instead of serving the file.
-          </p>
-        </div>
+        {data.metadataRestricted ? (
+          <div className="panel panel-tint panel-flat">
+            <h4>Management view</h4>
+            <p className="tiny" style={{ marginTop: 6 }}>
+              You can manage this file’s access list, but its name, hash and other metadata are hidden by your role rule.
+            </p>
+          </div>
+        ) : (
+          <div className="stack">
+            <h4>Content hash recorded on chain</h4>
+            <div className="hash">{data.contentHash}</div>
+            <p className="tiny muted">
+              The file is re-hashed on every read and compared with this value. A mismatch
+              stops the transfer instead of serving the file.
+            </p>
+          </div>
+        )}
       </section>
 
       <div className="row">

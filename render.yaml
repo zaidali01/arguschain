@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: arguschain-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: arguschain-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: B2_ENDPOINT
+        value: "replace-with-your-b2-endpoint"
+      - key: B2_ACCESS_KEY_ID
+        value: "replace-with-your-access-key-id"
+      - key: B2_SECRET_ACCESS_KEY
+        value: "replace-with-your-secret-access-key"
+      - key: B2_BUCKET_NAME
+        value: "replace-with-your-bucket-name"
+      - key: KEK_SECRET
+        value: "replace-with-your-kek-secret"
+      - key: RPC_URL
+        value: "replace-with-your-rpc-url"
+      - key: ARGUS_IDENTITY_ADDR
+        value: "replace-with-argus-identity-addr"
+      - key: ROLE_REGISTRY_ADDR
+        value: "replace-with-role-registry-addr"
+      - key: ASSET_NFT_ADDR
+        value: "replace-with-asset-nft-addr"
+      - key: ACCESS_REGISTRY_ADDR
+        value: "replace-with-access-registry-addr"
+      - key: GRANT_WORKFLOW_ADDR
+        value: "replace-with-grant-workflow-addr"
+      - key: SIWE_DOMAIN
+        value: "replace-with-your-domain"
+      - key: LOCAL_DEMO_SELF_REGISTRATION
+        value: "false"
+      - key: LOCAL_DEMO_ADMIN_PRIVATE_KEY
+        value: "replace-with-admin-private-key"
+      - key: ACL_RELAYER_PRIVATE_KEY
+        value: "replace-with-acl-relayer-private-key"
+
+  - type: web
+    name: arguschain-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+
+databases:
+  - name: arguschain-db
+    plan: free

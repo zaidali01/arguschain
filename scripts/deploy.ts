@@ -62,12 +62,21 @@ async function main() {
   await (await audit.grantRole(await audit.ANCHOR_ROLE(), relayerAddr)).wait();
 
   // ---- bootstrap the first Admin, then the deployer renounces its own key ----
-  await (await roles.bootstrap(admin)).wait();
-  console.log("bootstrapped first Admin ->", admin);
-  console.log(
-    "NOTE: on a real deployment, now call roles.renounceRole(DEFAULT_ADMIN_ROLE, deployer) " +
-      "so no privileged key outlives deployment (Section 11.1). Left granted here for the local demo."
-  );
+  const userMetamask = admin;
+  
+  // 1. Give the user's address the ERC-1155 Admin Role Token (gives platform powers)
+  await (await roles.bootstrap(userMetamask)).wait();
+  
+  // 2. Grant the user's address DEFAULT_ADMIN_ROLE across all contracts
+  await (await roles.grantRole(await roles.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+  await (await identity.grantRole(await identity.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+  await (await assets.grantRole(await assets.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+  await (await access.grantRole(await access.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+  await (await workflow.grantRole(await workflow.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+  await (await audit.grantRole(await audit.DEFAULT_ADMIN_ROLE(), userMetamask)).wait();
+
+  console.log("bootstrapped first Admin ->", userMetamask);
+  console.log("Granted DEFAULT_ADMIN_ROLE on all contracts to ->", userMetamask);
 
   const out = {
     network: network.name,

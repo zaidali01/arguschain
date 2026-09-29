@@ -1,7 +1,8 @@
 import React from "react";
-import { api } from "../lib/session";
+import { api, useSession } from "../lib/session";
 import { Loading, ErrorBox, Empty, useAsync } from "../components/ui";
 import { approvalPolicy, TIERS } from "../lib/permissions";
+import { BrowserProvider, Contract } from "ethers";
 
 /* -------------------------------------------------------------------- risk */
 
@@ -78,6 +79,41 @@ export function Risk() {
 /* --------------------------------------------------------------- proposals */
 
 export function Proposals() {
+  const { data, error, loading, mutate } = useAsync<any[]>(() => api("/proposals"), []);
+  const config = useAsync<any>(() => api("/config"), []);
+  const { session } = useSession();
+  const [working, setWorking] = React.useState(0);
+
+  async function handleAction(pid: number, type: "approve" | "execute") {
+    try {
+      setWorking(pid);
+      const provider = new BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const workflow = new Contract(config.data!.contracts.GrantWorkflow, [
+        "function approve(uint256 pid, uint256 approverId)",
+        "function execute(uint256 pid)"
+      ], signer);
+
+      let tx;
+      if (type === "approve") {
+        tx = await workflow.approve(pid, session.identityId);
+      } else {
+        tx = await workflow.execute(pid);
+      }
+      await tx.wait();
+      mutate();
+    } catch (e: any) {
+      alert(e.message || "Action failed");
+    } finally {
+      setWorking(0);
+    }
+  }
+
+  if (loading || config.loading) return <Loading what="Reading proposals" />;
+  if (error || config.error) return <ErrorBox error={error || config.error} />;
+
+  const kindNames = ["Grant Access", "Mint & Allocate", "Transfer", "Clearance Uplift", "Admin Role Mint"];
+
   return (
     <>
       <section className="panel stack">
@@ -113,18 +149,64 @@ export function Proposals() {
         </div>
       </section>
 
-      <section className="panel panel-tint stack">
-        <h3>Not wired into this console yet</h3>
-        <p>
-          The propose, approve and execute workflow runs in the contracts and is
-          covered by the test suite, including the rule that a proposer can never
-          approve their own request. This screen does not yet drive it; the flow is
-          demonstrated from the command line.
-        </p>
-        <p className="tiny mono">
-          Needed to finish it: read endpoints for open proposals, and wallet-signed
-          calls to propose, approve and execute.
-        </p>
+      <section className="stack">
+        <h3>Open Proposals</h3>
+        {!data || data.length === 0 ? (
+          <Empty title="No open proposals" body="There are currently no proposals waiting for approval or execution." />
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>PID</th>
+                  <th>Action</th>
+                  <th>Proposer</th>
+                  <th>Tier</th>
+                  <th>Approvals</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((p) => {
+                  const policy = approvalPolicy(p.tier);
+                  const isReady = p.readyAt <= Date.now() / 1000;
+                  const hasApproved = p.approvers.includes(session?.identityId);
+                  const canApprove = p.proposer !== session?.identityId && !hasApproved && p.approvers.length < policy.approvals;
+                  const canExecute = p.approvers.length >= policy.approvals && isReady;
+
+                  return (
+                    <tr key={p.pid}>
+                      <td className="mono">#{p.pid}</td>
+                      <td>{kindNames[p.kind]}</td>
+                      <td className="mono">Identity #{p.proposer}</td>
+                      <td><span className={`chip chip-t${p.tier + 1}`}>{TIERS[p.tier]}</span></td>
+                      <td className="mono">{p.approvers.length} / {policy.approvals}</td>
+                      <td className="mono">
+                        {!isReady ? `Waiting until ${new Date(p.readyAt * 1000).toLocaleString()}` : "Ready"}
+                      </td>
+                      <td>
+                        <div className="row">
+                          {canApprove && (
+                            <button className="btn btn-sm btn-primary" onClick={() => handleAction(p.pid, "approve")} disabled={working === p.pid}>
+                              {working === p.pid ? "..." : "Approve"}
+                            </button>
+                          )}
+                          {canExecute && (
+                            <button className="btn btn-sm btn-accent" onClick={() => handleAction(p.pid, "execute")} disabled={working === p.pid}>
+                              {working === p.pid ? "..." : "Execute"}
+                            </button>
+                          )}
+                          {!canApprove && !canExecute && <span className="tiny muted">N/A</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </>
   );

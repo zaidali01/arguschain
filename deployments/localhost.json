@@ -1,7 +1,7 @@
 {
   "network": "localhost",
   "chainId": 31337,
-  "deployedAt": "2026-09-23T22:11:40.240Z",
+  "deployedAt": "2026-09-29T13:14:45.974Z",
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "relayer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
   "oracle": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
@@ -14,5 +14,5 @@
     "GrantWorkflow": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
     "AuditAnchor": "0x0165878A594ca255338adfa4d48449f69242Eb8F"
   },
-  "startBlock": 17
+  "startBlock": 23
 }

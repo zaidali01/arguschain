@@ -62,7 +62,28 @@ export const REFUSALS: Record<string, { title: string; body: string; action?: st
   NOT_ADMIN: { title: "Administrators only", body: "This action needs the Admin role token." },
   NO_ACL_ACCESS: { title: "Access list hidden", body: "Viewing the access list needs the ADMIN or AUDIT permission on this file." },
   HASH_MISMATCH: { title: "Hash does not match", body: "The uploaded file's hash differs from the one recorded on chain." },
+  CHAIN_UNAVAILABLE: { title: "Cannot reach the chain", body: "The server could not read the blockchain. This is a connection fault, not a decision about you. It usually clears on its own.", action: "Wait a moment and try again." },
+  INTERNAL_ERROR: { title: "Server error", body: "The request failed because of a fault on the server, not because of a policy decision about you." },
+  NETWORK_FAILED: { title: "Cannot reach the server", body: "The request never reached the API. Check that the backend is running." },
+  WRONG_NETWORK: { title: "Wrong network in your wallet", body: "Your wallet is on a different chain than this server expects. Nothing about your access was assessed." },
+  UNKNOWN_ERROR: { title: "Wallet error", body: "MetaMask returned an error this app could not classify, so nothing was evaluated and no policy check was reached.", action: "Check that MetaMask is unlocked and on the expected network, then try again." },
+  WALLET_ERROR: { title: "Wallet error", body: "Your wallet refused or failed the request. This is not a decision about your access." },
+  SIGN_IN_FAILED: { title: "Sign-in failed", body: "Signing in did not complete. This is a fault, not a policy decision." },
 };
 
-export const refusalFor = (code?: string) =>
-  (code && REFUSALS[code]) || { title: code || "Request refused", body: "The request did not pass a policy check." };
+/** A 5xx or a transport failure is a fault, not a refusal, and must never be
+ *  dressed up as one — the whole point of the reason codes is that they mean
+ *  something specific. */
+export const refusalFor = (code?: string, status?: number): { title: string; body: string; action?: string } => {
+  if (code && REFUSALS[code]) return REFUSALS[code];
+  if (!code || /^HTTP_5\d\d$/.test(code)) {
+    return status && status >= 500
+      ? REFUSALS.INTERNAL_ERROR
+      : { title: "Request failed", body: `The server responded ${status ?? "with an error"}. This was a fault, not a policy decision.` };
+  }
+  return {
+    title: code,
+    body: "This app does not recognise this error code, so it cannot say what caused it. An unrecognised code is not a statement about your access.",
+    action: "Quote this code when reporting it.",
+  };
+};

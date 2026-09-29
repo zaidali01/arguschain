@@ -5,4 +5,5 @@ typechain-types/
 coverage/
 coverage.json
 .env
+.env.*
 .DS_Store

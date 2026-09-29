@@ -1,6 +1,8 @@
 import { Request, Response, Router } from "express";
 import { generateNonce, SiweMessage } from "siwe";
 import jwt from "jsonwebtoken";
+import { ethers } from "ethers";
+import crypto from "crypto";
 import { contracts } from "../chain";
 import { ROLE_IDS, STATUS } from "../constants";
 import { jwtSecret, requireAuth } from "../middleware/auth";
@@ -9,10 +11,102 @@ const router = Router();
 const NONCE_TTL_MS = 5 * 60 * 1000;
 const nonces = new Map<string, number>(); // nonce -> expiry timestamp
 
+// This is deliberately a local-demo convenience, not a production enrolment
+// mechanism. The wallet still signs the exact EIP-712 registration payload
+// required by ArgusIdentity; the API only relays it using the local Admin key.
+const registrationChallenges = new Map<string, {
+  did: string; empCommitment: string; clearance: number; validUntil: string;
+  deadline: string; nonce: string; expiresAt: number;
+}>();
+const REGISTER_TYPES = {
+  Register: [
+    { name: "did", type: "address" },
+    { name: "empCommitment", type: "bytes32" },
+    { name: "clearance", type: "uint8" },
+    { name: "validUntil", type: "uint64" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+};
+
+function localRegistrationEnabled() {
+  return process.env.LOCAL_DEMO_SELF_REGISTRATION === "true";
+}
+
 router.get("/nonce", (_req, res) => {
   const nonce = generateNonce();
   nonces.set(nonce, Date.now() + NONCE_TTL_MS);
   res.json({ nonce });
+});
+
+/** Creates a short-lived EIP-712 payload for a wallet to self-register in the
+ * local demo. Production deployments must leave this feature disabled. */
+router.get("/register-challenge", async (req, res) => {
+  if (!localRegistrationEnabled()) return res.status(404).json({ code: "NOT_FOUND" });
+  const did = String(req.query.address || "");
+  if (!ethers.isAddress(did)) return res.status(422).json({ code: "BAD_ADDRESS" });
+
+  const existing = await contracts.identity.byDid(did);
+  if (existing !== 0n) return res.status(409).json({ code: "IDENTITY_EXISTS" });
+
+  const now = Math.floor(Date.now() / 1000);
+  const deadline = BigInt(now + 5 * 60);
+  const validUntil = BigInt(now + 365 * 24 * 60 * 60);
+  const nonce = await contracts.identity.nonces(did);
+  const empCommitment = ethers.keccak256(
+    ethers.toUtf8Bytes(`local-demo:${did.toLowerCase()}:${crypto.randomUUID()}`)
+  );
+  const key = did.toLowerCase();
+  const challenge = {
+    did, empCommitment, clearance: 1, validUntil: validUntil.toString(),
+    deadline: deadline.toString(), nonce: nonce.toString(), expiresAt: Date.now() + NONCE_TTL_MS,
+  };
+  registrationChallenges.set(key, challenge);
+
+  const network = await contracts.identity.runner!.provider!.getNetwork();
+  res.json({
+    domain: { name: "ArgusIdentity", version: "4", chainId: Number(network.chainId), verifyingContract: await contracts.identity.getAddress() },
+    types: REGISTER_TYPES,
+    value: {
+      did, empCommitment, clearance: 1, validUntil: challenge.validUntil,
+      nonce: challenge.nonce, deadline: challenge.deadline,
+    },
+  });
+});
+
+router.post("/register", async (req, res) => {
+  if (!localRegistrationEnabled()) return res.status(404).json({ code: "NOT_FOUND" });
+  const { address, signature } = req.body ?? {};
+  if (!ethers.isAddress(address) || typeof signature !== "string") {
+    return res.status(422).json({ code: "BAD_REQUEST" });
+  }
+  const key = address.toLowerCase();
+  const challenge = registrationChallenges.get(key);
+  registrationChallenges.delete(key); // one attempt per challenge; prevents replay
+  if (!challenge || challenge.expiresAt < Date.now()) return res.status(401).json({ code: "REGISTRATION_EXPIRED" });
+
+  const network = await contracts.identity.runner!.provider!.getNetwork();
+  const domain = { name: "ArgusIdentity", version: "4", chainId: Number(network.chainId), verifyingContract: await contracts.identity.getAddress() };
+  const value = {
+    did: challenge.did, empCommitment: challenge.empCommitment, clearance: challenge.clearance,
+    validUntil: challenge.validUntil, nonce: challenge.nonce, deadline: challenge.deadline,
+  };
+  try {
+    if (ethers.verifyTypedData(domain, REGISTER_TYPES, value, signature).toLowerCase() !== key) {
+      return res.status(401).json({ code: "BAD_SIGNATURE" });
+    }
+    const relayerKey = process.env.LOCAL_DEMO_ADMIN_PRIVATE_KEY;
+    if (!relayerKey) return res.status(503).json({ code: "REGISTRATION_UNAVAILABLE" });
+    const relayer = new ethers.Wallet(relayerKey, contracts.identity.runner!.provider!);
+    const tx = await (contracts.identity.connect(relayer) as any).registerIdentity(
+      challenge.did, challenge.empCommitment, challenge.clearance, challenge.validUntil, challenge.deadline, signature
+    );
+    await tx.wait();
+    const identityId = await contracts.identity.byDid(challenge.did);
+    res.status(201).json({ identityId: identityId.toString(), clearance: challenge.clearance });
+  } catch (error: any) {
+    res.status(400).json({ code: "REGISTRATION_FAILED", detail: error.shortMessage || error.message });
+  }
 });
 
 router.post("/verify", async (req: Request, res: Response) => {

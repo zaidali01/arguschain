@@ -33,16 +33,21 @@ function StatusBar() {
   );
 }
 
-/** Sessions last 15 minutes; warn before the user discovers it mid-action. */
-function SessionClock({ onExpire }: { onExpire: () => void }) {
-  const [left, setLeft] = useState(900);
+/** Mirrors the JWT's actual expiry rather than restarting after a page reload. */
+function SessionClock({ expiresAt, onExpire }: { expiresAt: number | null; onExpire: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setLeft((s) => {
-      if (s <= 1) { onExpire(); return 0; }
-      return s - 1;
-    }), 1000);
+    const tick = () => {
+      const current = Date.now();
+      setNow(current);
+      if (expiresAt !== null && current >= expiresAt) onExpire();
+    };
+    tick();
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [onExpire]);
+  }, [expiresAt, onExpire]);
+
+  const left = Math.max(0, Math.ceil(((expiresAt ?? now) - now) / 1000));
 
   const mins = Math.floor(left / 60);
   const secs = String(left % 60).padStart(2, "0");
@@ -54,7 +59,7 @@ function SessionClock({ onExpire }: { onExpire: () => void }) {
 }
 
 function SignInGate() {
-  const { connect, signIn, connecting, address, error } = useSession();
+  const { connect, signIn, registerLocalDemoUser, connecting, address, error } = useSession();
   const r = error ? refusalFor(error.code) : null;
 
   return (
@@ -83,6 +88,11 @@ function SignInGate() {
             <div className="panel panel-alert panel-flat">
               <h4>{r.title}</h4>
               <p style={{ marginTop: 6 }}>{error?.detail || r.body}</p>
+              {error?.code === "IDENTITY_NOT_FOUND" && (
+                <button className="btn btn-block" style={{ marginTop: 14 }} onClick={registerLocalDemoUser} disabled={connecting}>
+                  Register this wallet as a local demo user
+                </button>
+              )}
             </div>
           )}
 
@@ -97,7 +107,7 @@ function SignInGate() {
 }
 
 export default function Shell() {
-  const { session, signOut, address } = useSession();
+  const { session, expiresAt, signOut, address } = useSession();
 
   return (
     <>
@@ -122,7 +132,7 @@ export default function Shell() {
 
           {session ? (
             <div className="row">
-              <SessionClock onExpire={signOut} />
+              <SessionClock expiresAt={expiresAt} onExpire={signOut} />
               <div className="acting">
                 <span className="tiny mono muted">Acting as</span>
                 <span className="who">Identity #{session.identityId}</span>

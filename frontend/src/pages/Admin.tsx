@@ -19,11 +19,46 @@ type Step =
   | { s: "mining"; hash: string; tx: string }
   | { s: "linking"; tokenId: string }
   | { s: "done"; tokenId: string }
-  | { s: "failed"; message: string };
+  | { s: "failed"; stage: string; message: string; code?: string };
+
+function explain(e: any): { message: string; code?: string } {
+  if (e?.walletRpc) return { message: e.message, code: e.code };
+  const inner = e?.info?.error ?? e?.error ?? e?.cause ?? null;
+  const parts = [
+    e?.reason,
+    inner?.message,
+    inner?.data?.message,
+    e?.shortMessage,
+    e?.detail,
+    e?.message,
+  ].filter((x): x is string => typeof x === "string" && x.length > 0);
+  const unique = Array.from(new Set(parts));
+  return { message: unique[0] ?? "Unknown failure", code: e?.code ?? inner?.code };
+}
+
+/** MetaMask answers eth_chainId from its own config, so a dead RPC for the
+ *  selected network only surfaces at the first real read — which is the mint.
+ *  That arrives as an opaque "Internal JSON-RPC error", so probe it first. */
+async function assertProviderReachable(provider: BrowserProvider, chainId: number) {
+  try {
+    await provider.send("eth_getBlockByNumber", ["latest", false]);
+  } catch (e: any) {
+    const inner = e?.info?.error ?? e?.error ?? e?.info ?? e;
+    throw Object.assign(
+      new Error(
+        `MetaMask cannot reach an RPC node for chain ${chainId}, so the transaction cannot be ` +
+        `estimated. Open MetaMask → Settings → Networks → ${chainId === 11155111 ? "Sepolia" : chainId} ` +
+        `and set the RPC URL to https://ethereum-sepolia-rpc.publicnode.com ` +
+        `(MetaMask's built-in default, https://rpc.sepolia.org, currently returns a 404).`
+      ),
+      { code: inner?.code ?? "RPC_UNREACHABLE", walletRpc: true }
+    );
+  }
+}
 
 export default function Admin() {
   const { session } = useSession();
-  const config = useAsync<{ contracts: Record<string, string> }>(() => api("/config"), []);
+  const config = useAsync<{ contracts: Record<string, string>; chainId: number }>(() => api("/config"), []);
   const [file, setFile] = useState<File | null>(null);
   const [owner, setOwner] = useState("2");
   const [classification, setClassification] = useState(1);
@@ -35,28 +70,58 @@ export default function Admin() {
 
   async function run() {
     if (!file || !reason.trim()) return;
+    let stage = "Encrypt and store";
     try {
       setStep({ s: "uploading" });
       const form = new FormData();
       form.append("file", file);
       const up = await api<any>("/assets/upload", { method: "POST", body: form });
 
+      stage = "Switch MetaMask to the right network";
       setStep({ s: "signing", hash: up.contentHash });
       const provider = new BrowserProvider((window as any).ethereum);
+
+      // Ensure MetaMask is on the correct chain before submitting
+      const targetChainId: number = config.data!.chainId;
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== targetChainId) {
+        try {
+          await (window as any).ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: `0x${targetChainId.toString(16)}` }],
+          });
+        } catch (switchErr: any) {
+          // Chain not added to MetaMask — add it (only needed for non-standard chains)
+          if (switchErr.code === 4902) {
+            throw new Error(`Please add chain ${targetChainId} to MetaMask manually and try again.`);
+          }
+          throw switchErr;
+        }
+      }
+
+      stage = "Estimate and sign the mint in your wallet";
+      await assertProviderReachable(provider, targetChainId);
       const signer = await provider.getSigner();
       const assets = new Contract(config.data!.contracts.AssetNFT, ASSET_ABI, signer);
 
       const tx = await assets.mint(owner, up.contentHash, classification, keccak256(toUtf8Bytes(reason)));
+      stage = "Wait for the transaction to confirm";
       setStep({ s: "mining", hash: up.contentHash, tx: tx.hash });
       await tx.wait();
 
+      stage = "Bind the stored file to the token";
       const tokenId = (await assets.totalMinted()).toString();
       setStep({ s: "linking", tokenId });
       await api(`/assets/${tokenId}/link`, { method: "POST", body: JSON.stringify(up) });
       setStep({ s: "done", tokenId });
     } catch (e: any) {
-      const reverted = e?.info?.error?.message || e?.shortMessage || e?.detail || e?.message;
-      setStep({ s: "failed", message: e?.code === "ACTION_REJECTED" ? "You declined the signature in your wallet." : String(reverted) });
+      const { message, code } = explain(e);
+      setStep({
+        s: "failed",
+        stage,
+        code,
+        message: code === "ACTION_REJECTED" ? "You declined the signature in your wallet." : message,
+      });
     }
   }
 
@@ -160,7 +225,9 @@ export default function Admin() {
           {step.s === "failed" && (
             <div className="panel panel-alert panel-flat stack">
               <h4>Registration stopped</h4>
+              <p className="tiny">Failed while trying to: <strong>{step.stage}</strong></p>
               <p className="tiny mono">{step.message}</p>
+              {step.code && <p className="tiny mono">code: {step.code}</p>}
               <p className="tiny">
                 If this says the content is a duplicate, the same bytes are already
                 registered under another token. The same file can never be registered twice.

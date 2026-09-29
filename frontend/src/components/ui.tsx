@@ -1,5 +1,5 @@
 import React from "react";
-import { BITS, TIERS, ROLES, refusalFor, toMask, maskHex } from "../lib/permissions";
+import { BITS, TIERS, ROLES, REFUSALS, refusalFor, toMask, maskHex } from "../lib/permissions";
 import { ApiError } from "../lib/session";
 
 export function Tier({ level }: { level: number }) {
@@ -47,7 +47,8 @@ export function BitGrid({ mask, stripped = 0 }: { mask: string | number; strippe
 }
 
 export function Refusal({ error }: { error: ApiError }) {
-  const r = refusalFor(error.code);
+  const r = refusalFor(error.code, error.status);
+  const isFault = !REFUSALS[error.code] && (error.status >= 500 || !error.code);
   return (
     <div className="panel panel-alert stack">
       <div className="row" style={{ justifyContent: "space-between" }}>
@@ -55,6 +56,7 @@ export function Refusal({ error }: { error: ApiError }) {
         <span className="chip mono">{error.code}</span>
       </div>
       <p>{error.detail || r.body}</p>
+      {isFault && <p className="tiny muted">This was a server or connection fault, not a decision about your access.</p>}
       {r.action && <p className="mono tiny"><b>What to do:</b> {r.action}</p>}
       {error.risk && (
         <div className="panel panel-flat">

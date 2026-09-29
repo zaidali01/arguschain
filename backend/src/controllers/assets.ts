@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import { ethers } from "ethers";
 import { contracts } from "../chain";
 import { requireAuth } from "../middleware/auth";
 import { authorize } from "../pdp";
@@ -16,6 +17,10 @@ const BITS: [string, number][] = [
   ["P_WRITE", P.WRITE], ["P_SHARE", P.SHARE], ["P_ADMIN", P.ADMIN], ["P_AUDIT", P.AUDIT],
 ];
 const idOf = (raw: any) => (/^\d+$/.test(String(raw)) ? String(raw) : null);
+const resourceOf = (tokenId: string) => ethers.zeroPadValue(ethers.toBeHex(BigInt(tokenId)), 32);
+const principalOf = (identityId: string) => ethers.solidityPackedKeccak256(
+  ["uint8", "uint256"], [1, BigInt(identityId)]
+);
 
 router.get("/", requireAuth, async (req, res) => {
   const total = Number(await contracts.assets.totalMinted());
@@ -37,12 +42,84 @@ router.get("/", requireAuth, async (req, res) => {
   }
   res.json(out);
 });
+
+// The access editor needs a compact, current list of identities without
+// exposing employee commitments or other credential data.
+router.get("/identities", requireAuth, async (_req, res) => {
+  const total = Number(await contracts.identity.totalIssued());
+  const identities = await Promise.all(Array.from({ length: total }, async (_, index) => {
+    const identityId = BigInt(index + 1);
+    const record = await contracts.identity.identities(identityId);
+    return {
+      identityId: identityId.toString(),
+      controller: await contracts.identity.controllerOf(identityId),
+      clearance: Number(record.clearance),
+      active: await contracts.identity.isActive(identityId),
+    };
+  }));
+  res.json(identities);
+});
+
+/** Relayed direct grant for PUBLIC/RESTRICTED assets. The gateway first checks
+ * the caller's live P_ADMIN permission; the contract independently refuses
+ * CONFIDENTIAL+ assets, which must use GrantWorkflow. */
+router.post("/:id/access", requireAuth, async (req, res) => {
+  const tokenId = idOf(req.params.id);
+  if (!tokenId) return res.status(400).json({ code: "BAD_TOKEN_ID" });
+
+  const { targetIdentity, allowMask = 0, denyMask = 0, expiresAt = 0, reason } = req.body ?? {};
+  const target = idOf(targetIdentity);
+  const validMask = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 255;
+  if (!target || !validMask(allowMask) || !validMask(denyMask) || typeof reason !== "string" || !reason.trim()) {
+    return res.status(422).json({ code: "BAD_REQUEST", detail: "Choose an identity, permissions, and a written reason." });
+  }
+  if (target === req.user!.identityId) return res.status(422).json({ code: "BAD_REQUEST", detail: "You cannot grant permissions to yourself." });
+  if (!Number.isInteger(expiresAt) || expiresAt < 0) return res.status(422).json({ code: "BAD_REQUEST", detail: "Expiry must be a valid date." });
+
+  const decision = await authorize(req.user!, tokenId, P.ADMIN);
+  if (!decision.allow) return res.status(decision.status).json({ code: decision.code, detail: decision.detail });
+  if (!(await contracts.identity.isActive(target))) return res.status(422).json({ code: "IDENTITY_INACTIVE" });
+  if (Number(await contracts.assets.classificationOf(tokenId)) >= 2) {
+    return res.status(409).json({ code: "REQUIRES_WORKFLOW", detail: "CONFIDENTIAL and higher grants require a proposal and approvals." });
+  }
+
+  const relayerKey = process.env.ACL_RELAYER_PRIVATE_KEY;
+  if (!relayerKey) return res.status(503).json({ code: "ACL_RELAY_UNAVAILABLE" });
+  try {
+    const relayer = new ethers.Wallet(relayerKey, contracts.access.runner!.provider!);
+    const tx = await (contracts.access.connect(relayer) as any).setAce(
+      resourceOf(tokenId), principalOf(target), allowMask, denyMask, 0, expiresAt, 0,
+      BigInt(req.user!.identityId), ethers.keccak256(ethers.toUtf8Bytes(reason.trim()))
+    );
+    const receipt = await tx.wait();
+    res.status(201).json({ ok: true, txHash: receipt.hash });
+  } catch (error: any) {
+    res.status(400).json({ code: "ACCESS_GRANT_FAILED", detail: error.shortMessage || error.message });
+  }
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
   const tokenId = idOf(req.params.id);
   if (!tokenId) return res.status(400).json({ code: "BAD_TOKEN_ID" });
 
   const d = await authorize(req.user!, tokenId, P.READ_META);
-  if (!d.allow) return res.status(d.status).json({ code: d.code, detail: d.detail });
+  // An Admin is deliberately seeded with LIST + ADMIN, not READ_META. Let
+  // that role reach the ACL editor without widening its effective permissions
+  // or exposing the file name, hash, size, or MIME type.
+  if (!d.allow) {
+    const [admin, audit] = await Promise.all([
+      authorize(req.user!, tokenId, P.ADMIN), authorize(req.user!, tokenId, P.AUDIT),
+    ]);
+    if (!admin.allow && !audit.allow) return res.status(d.status).json({ code: d.code, detail: d.detail });
+    const a = await contracts.assets.assets(tokenId);
+    return res.json({
+      tokenId, name: null, size: null, mimeType: null, contentHash: null,
+      classification: Number(a.classification), version: Number(a.version),
+      ownerIdentity: a.ownerIdentity.toString(), effective: `0x${d.effective.toString(16).padStart(2, "0")}`,
+      metadataRestricted: true,
+    });
+  }
 
   const a = await contracts.assets.assets(tokenId);
   const file = await prisma.storedFile.findUnique({ where: { tokenId } });
@@ -51,6 +128,7 @@ router.get("/:id", requireAuth, async (req, res) => {
     contentHash: a.contentHash, classification: Number(a.classification),
     version: Number(a.version), ownerIdentity: a.ownerIdentity.toString(),
     effective: `0x${d.effective.toString(16).padStart(2, "0")}`,
+    metadataRestricted: false,
   });
 });
 

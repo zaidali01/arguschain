@@ -1,0 +1,17 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployedAt": "2026-09-27T16:42:50.482Z",
+  "deployer": "0x017EAD9D9cC53DCaf3d9774d3BA25492E5f01886",
+  "relayer": "0x017EAD9D9cC53DCaf3d9774d3BA25492E5f01886",
+  "contracts": {
+    "EthereumDIDRegistry": "0x529F9554b0cbcA4629e46AE995A8b45cF8596135",
+    "RoleRegistry": "0x8dD0B343be69E631f4F6cd1731E3c3574796480C",
+    "ArgusIdentity": "0xE1a1d0Cd2250EF983dF436Eeb4CB7A9dD2d65cf6",
+    "AssetNFT": "0x42C4ab3dB5C1A8Db0896b9B34B45BC75FBCd49D9",
+    "AccessRegistry": "0x34516C618eBEEd1f3840674140BfB1C91111ff74",
+    "GrantWorkflow": "0x6B1a2BeAD1Cd6BdCb2384faeA57181233AfAD20B",
+    "AuditAnchor": "0xFe2A91583C624362E7A851eEbFBB7A7bc179e5c2"
+  },
+  "startBlock": 11794598
+}

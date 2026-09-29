@@ -23,6 +23,22 @@ function siweMessage(o: {
 }
 const API = "/api";
 
+/** Wallet errors carry no `detail` — that field belongs to our own API. Reading
+ *  only `detail` is what made a MetaMask fault render as a blank policy notice. */
+function describeWalletError(e: any, fallbackCode: string): { code: string; detail: string } {
+  const inner = e?.info?.error ?? e?.error ?? e?.info ?? null;
+  const message = [inner?.message, inner?.data?.message, e?.shortMessage, e?.reason, e?.message].find(
+    (x): x is string => typeof x === "string" && x.trim().length > 0
+  );
+  const code = String(e?.code ?? fallbackCode);
+  return {
+    code,
+    detail: message
+      ? `${message}${typeof inner?.code === "number" ? ` (wallet code ${inner.code})` : ""}`
+      : "The wallet returned an error with no description.",
+  };
+}
+
 export interface Session {
   identityId: string;
   address: string;
@@ -41,12 +57,29 @@ export class ApiError extends Error {
 
 let token: string | null = sessionStorage.getItem("argus.token");
 
+/** Reads the signed JWT expiry for display only. The API remains the authority
+ * and independently validates the token on every request. */
+function tokenExpiresAt(raw: string | null): number | null {
+  try {
+    const payload = raw?.split(".")[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = JSON.parse(json).exp;
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch { return null; }
+}
+
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
 
-  const res = await fetch(`${API}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, { ...init, headers });
+  } catch (e: any) {
+    throw new ApiError(0, "NETWORK_FAILED", e?.message);
+  }
   const type = res.headers.get("content-type") || "";
 
   if (!res.ok) {
@@ -73,11 +106,13 @@ export async function apiRaw(path: string, stepUp = false): Promise<Response> {
 
 interface Ctx {
   session: Session | null;
+  expiresAt: number | null;
   address: string | null;
   connecting: boolean;
   error: { code: string; detail?: string } | null;
   connect: () => Promise<void>;
   signIn: () => Promise<void>;
+  registerLocalDemoUser: () => Promise<void>;
   signOut: () => void;
 }
 
@@ -91,6 +126,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const raw = sessionStorage.getItem("argus.session");
     return raw ? JSON.parse(raw) : null;
   });
+  const [expiresAt, setExpiresAt] = useState<number | null>(() => tokenExpiresAt(token));
   const [address, setAddress] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<{ code: string; detail?: string } | null>(null);
@@ -100,6 +136,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem("argus.token");
     sessionStorage.removeItem("argus.session");
     setSession(null);
+    setExpiresAt(null);
   }, []);
 
   const connect = useCallback(async () => {
@@ -107,9 +144,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setError({ code: "NO_WALLET", detail: "No wallet extension detected. Install MetaMask to continue." });
       return;
     }
-    const accounts: string[] = await eth().request({ method: "eth_requestAccounts" });
-    setAddress(accounts[0] ?? null);
+    try {
+      const accounts: string[] = await eth().request({ method: "eth_requestAccounts" });
+      setAddress(accounts[0] ?? null);
+    } catch (e: any) {
+      setError(describeWalletError(e, "CONNECT_FAILED"));
+    }
   }, []);
+
 
   const signIn = useCallback(async () => {
     setConnecting(true);
@@ -120,6 +162,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const signer = await provider.getSigner();
       const who = await signer.getAddress();
       const { chainId } = await provider.getNetwork();
+
+      const cfg = await api<{ chainId: number; network?: string }>("/config").catch(() => null);
+      if (cfg && Number(chainId) !== cfg.chainId) {
+        throw Object.assign(
+          new Error(
+            `Your wallet is on chain ${chainId}, but this server is configured for chain ` +
+            `${cfg.chainId}${cfg.network ? ` (${cfg.network})` : ""}. Switch networks in ` +
+            `MetaMask and sign in again.`
+          ),
+          { code: "WRONG_NETWORK" }
+        );
+      }
 
       const { nonce } = await api<{ nonce: string }>("/auth/nonce");
       const message = siweMessage({
@@ -141,14 +195,40 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem("argus.token", out.token);
       sessionStorage.setItem("argus.session", JSON.stringify(out.session));
       setSession(out.session);
+      setExpiresAt(tokenExpiresAt(out.token));
       setAddress(who);
     } catch (e: any) {
       if (e?.code === 4001 || e?.code === "ACTION_REJECTED") setError({ code: "SIGNATURE_REJECTED", detail: "You declined the signature." });
-      else setError({ code: e?.code || "SIGN_IN_FAILED", detail: e?.detail });
+      else if (e instanceof ApiError) setError({ code: e.code, detail: e.detail });
+      else setError(describeWalletError(e, "SIGN_IN_FAILED"));
     } finally {
       setConnecting(false);
     }
   }, []);
+
+  const registerLocalDemoUser = useCallback(async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      if (!eth()) throw new ApiError(0, "NO_WALLET", "No wallet extension detected.");
+      const provider = new BrowserProvider(eth());
+      const signer = await provider.getSigner();
+      const who = await signer.getAddress();
+      const challenge = await api<{ domain: any; types: any; value: any }>(
+        `/auth/register-challenge?address=${encodeURIComponent(who)}`
+      );
+      const signature = await signer.signTypedData(challenge.domain, challenge.types, challenge.value);
+      await api("/auth/register", { method: "POST", body: JSON.stringify({ address: who, signature }) });
+      setAddress(who);
+      await signIn();
+    } catch (e: any) {
+      if (e?.code === 4001 || e?.code === "ACTION_REJECTED") setError({ code: "SIGNATURE_REJECTED", detail: "You declined the registration signature." });
+      else if (e instanceof ApiError) setError({ code: e.code, detail: e.detail });
+      else setError(describeWalletError(e, "REGISTRATION_FAILED"));
+    } finally {
+      setConnecting(false);
+    }
+  }, [signIn]);
 
   // Switching MetaMask accounts means acting as a different person, so the old
   // session must not survive: the demo depends on that being unambiguous.
@@ -164,8 +244,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [signOut]);
 
   const value = useMemo(
-    () => ({ session, address, connecting, error, connect, signIn, signOut }),
-    [session, address, connecting, error, connect, signIn, signOut]
+    () => ({ session, expiresAt, address, connecting, error, connect, signIn, registerLocalDemoUser, signOut }),
+    [session, expiresAt, address, connecting, error, connect, signIn, registerLocalDemoUser, signOut]
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
