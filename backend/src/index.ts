@@ -40,7 +40,7 @@ app.get("/health/chain", async (_req, res) => {
 // The browser signs its own mint transactions, so it needs the addresses.
 // Addresses are public on chain; no secret leaves the server here.
 app.get("/config", (_req, res) => {
-  const deployment = require("fs").readFileSync(require("path").join(__dirname, "../..", "deployments", `${process.env.CHAIN_NETWORK || "localhost"}.json`), "utf8");
+  const deployment = require("fs").readFileSync(require("path").join(__dirname, "..", "..", "deployments", `${process.env.CHAIN_NETWORK || "localhost"}.json`), "utf8");
   console.log("Config requested. CHAIN_NETWORK:", process.env.CHAIN_NETWORK, "AssetNFT:", JSON.parse(deployment).contracts.AssetNFT);
   res.json({ contracts: addresses, chainId: JSON.parse(deployment).chainId });
 });

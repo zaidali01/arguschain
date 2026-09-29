@@ -2,27 +2,28 @@ import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
 
-const ROOT = path.resolve(__dirname, "../..");
+const BACKEND_ROOT = path.resolve(__dirname, "..");
+const PROJECT_ROOT = path.resolve(BACKEND_ROOT, "..");
 const NETWORK = process.env.CHAIN_NETWORK || "localhost";
 
 const deployment = JSON.parse(
-  fs.readFileSync(path.join(ROOT, "deployments", `${NETWORK}.json`), "utf8")
+  fs.readFileSync(path.join(PROJECT_ROOT, "deployments", `${NETWORK}.json`), "utf8")
 );
 
-// contract name -> path of its .sol file inside contracts/
-const SOURCES: Record<string, string> = {
-  EthereumDIDRegistry: "identity/EthereumDIDRegistry.sol",
-  ArgusIdentity: "ArgusIdentity.sol",
-  RoleRegistry: "RoleRegistry.sol",
-  AssetNFT: "AssetNFT.sol",
-  AccessRegistry: "AccessRegistry.sol",
-  GrantWorkflow: "GrantWorkflow.sol",
-  AuditAnchor: "AuditAnchor.sol",
-};
+const CONTRACT_NAMES = [
+  "EthereumDIDRegistry",
+  "ArgusIdentity",
+  "RoleRegistry",
+  "AssetNFT",
+  "AccessRegistry",
+  "GrantWorkflow",
+  "AuditAnchor",
+] as const;
 
 function abiOf(name: string) {
-  const file = path.join(ROOT, "artifacts", "contracts", SOURCES[name], `${name}.json`);
-  return JSON.parse(fs.readFileSync(file, "utf8")).abi;
+  // Use pre-extracted ABIs committed in backend/abis/
+  const file = path.join(BACKEND_ROOT, "abis", `${name}.json`);
+  return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
 export const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "http://127.0.0.1:8545");

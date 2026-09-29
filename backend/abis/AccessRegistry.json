@@ -1,0 +1,812 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "identity_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "roles_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "assets_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "AccessControlBadConfirmation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "neededRole",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AccessControlUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "DelegationDepthExhausted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "DelegationExceedsGrantor",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "JustificationRequired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotActiveIdentity",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RequiresWorkflow",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SelfGrantForbidden",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "UnknownAsset",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "revokedBy",
+        "type": "uint256"
+      }
+    ],
+    "name": "AceRevoked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "denyMask",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "notBefore",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "expiresAt",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "delegationDepth",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "grantedBy",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AceSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "previousAdminRole",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "newAdminRole",
+        "type": "bytes32"
+      }
+    ],
+    "name": "RoleAdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
+    ],
+    "name": "RoleGranted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
+    ],
+    "name": "RoleRevoked",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "ACL_WRITER_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "ASSET_SEEDER_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CONFIDENTIAL",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "DEFAULT_ADMIN_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "GRANT_EXECUTOR_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "assets",
+    "outputs": [
+      {
+        "internalType": "contract AssetNFT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "toPrincipal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint64",
+        "name": "expiresAt",
+        "type": "uint64"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "delegate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "effectivePermissions",
+    "outputs": [
+      {
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "idt",
+        "type": "uint256"
+      }
+    ],
+    "name": "effectivePermissionsForIdentity",
+    "outputs": [
+      {
+        "internalType": "uint32",
+        "name": "eff",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "denyMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint64",
+        "name": "notBefore",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "expiresAt",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint8",
+        "name": "delegationDepth",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "grantedBy",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "executeGrant",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getAce",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "allowMask",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "denyMask",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "notBefore",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "expiresAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint8",
+            "name": "delegationDepth",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint256",
+            "name": "grantedBy",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "justificationHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "grantedAt",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct AccessRegistry.Ace",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getRoleAdmin",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "grantRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "hasRole",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "identity",
+    "outputs": [
+      {
+        "internalType": "contract ArgusIdentity",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "idt",
+        "type": "uint256"
+      }
+    ],
+    "name": "principalsOf",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "subs",
+        "type": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "principalsOnResource",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "",
+        "type": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "callerConfirmation",
+        "type": "address"
+      }
+    ],
+    "name": "renounceRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "revokedBy",
+        "type": "uint256"
+      }
+    ],
+    "name": "revokeAce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "revokeRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "roles",
+    "outputs": [
+      {
+        "internalType": "contract RoleRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "seedAce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "resourceId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "denyMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint64",
+        "name": "notBefore",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "expiresAt",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint8",
+        "name": "delegationDepth",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "grantedBy",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "setAce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes4",
+        "name": "interfaceId",
+        "type": "bytes4"
+      }
+    ],
+    "name": "supportsInterface",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

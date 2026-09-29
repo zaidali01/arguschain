@@ -1,0 +1,1121 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "identity_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "roles_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "assets_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "access_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "AccessControlBadConfirmation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "neededRole",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AccessControlUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyApproved",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyFinalised",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientApprovals",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientClearance",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NoAdminOnResource",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotActiveIdentity",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotReady",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotSecurityOfficer",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ProposerIsApprover",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SecurityOfficerRequired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SelfGrantForbidden",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "TierOutOfRange",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "TtlRequired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "TtlTooLong",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "UnknownAsset",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "UnknownProposal",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "approver",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "approvalsSoFar",
+        "type": "uint8"
+      }
+    ],
+    "name": "Approved",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "by",
+        "type": "uint256"
+      }
+    ],
+    "name": "BreakGlassUsed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "enum GrantWorkflow.ProposalType",
+        "name": "kind",
+        "type": "uint8"
+      }
+    ],
+    "name": "Executed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "enum GrantWorkflow.ProposalType",
+        "name": "kind",
+        "type": "uint8"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposer",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "tier",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "readyAt",
+        "type": "uint64"
+      }
+    ],
+    "name": "Proposed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "by",
+        "type": "uint256"
+      }
+    ],
+    "name": "Rejected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "previousAdminRole",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "newAdminRole",
+        "type": "bytes32"
+      }
+    ],
+    "name": "RoleAdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
+    ],
+    "name": "RoleGranted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
+    ],
+    "name": "RoleRevoked",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "BREAK_GLASS_TTL",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CONFIDENTIAL",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "DEFAULT_ADMIN_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "PUBLIC",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "RELAYER_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "RESTRICTED",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SECRET",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TOP_SECRET",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "WORKFLOW_ADMIN_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "access",
+    "outputs": [
+      {
+        "internalType": "contract AccessRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "approverId",
+        "type": "uint256"
+      }
+    ],
+    "name": "approve",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "name": "approversOf",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "assets",
+    "outputs": [
+      {
+        "internalType": "contract AssetNFT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "byId",
+        "type": "uint256"
+      }
+    ],
+    "name": "breakGlass",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "name": "execute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "name": "getProposal",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "enum GrantWorkflow.ProposalType",
+            "name": "kind",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "resourceId",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "principal",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "targetIdentity",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "targetDid",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "allowMask",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "denyMask",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "expiresAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint8",
+            "name": "delegationDepth",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "tier",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "contentHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "justificationHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "proposer",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "approvers",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint64",
+            "name": "readyAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "executed",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "rejected",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "breakGlass",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct GrantWorkflow.Proposal",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getRoleAdmin",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "grantRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "hasApproved",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "hasRole",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "identity",
+    "outputs": [
+      {
+        "internalType": "contract ArgusIdentity",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "name": "policyFor",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "approvalsRequired",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "requireSecurityOfficer",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "requireTopSecretApprovers",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint64",
+        "name": "timelock",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "maxTtl",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "toDid",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposerId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeAdminGrant",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "targetIdentity",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "newClearance",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposerId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeClearanceUplift",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "resourceTokenId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "principal",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "allowMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "denyMask",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint64",
+        "name": "expiresAt",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint8",
+        "name": "delegationDepth",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposerId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeGrant",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "toIdentity",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "contentHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint8",
+        "name": "classification",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposerId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeMint",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "toIdentity",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "justificationHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposerId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeTransfer",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "pid",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "byId",
+        "type": "uint256"
+      }
+    ],
+    "name": "reject",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "callerConfirmation",
+        "type": "address"
+      }
+    ],
+    "name": "renounceRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "role",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "revokeRole",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "roles",
+    "outputs": [
+      {
+        "internalType": "contract RoleRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tier",
+        "type": "uint8"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "approvalsRequired",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bool",
+            "name": "requireSecurityOfficer",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "requireTopSecretApprovers",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint64",
+            "name": "timelock",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "maxTtl",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct GrantWorkflow.Policy",
+        "name": "p",
+        "type": "tuple"
+      }
+    ],
+    "name": "setPolicy",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes4",
+        "name": "interfaceId",
+        "type": "bytes4"
+      }
+    ],
+    "name": "supportsInterface",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalProposals",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
