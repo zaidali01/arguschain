@@ -79,7 +79,7 @@ export function Risk() {
 /* --------------------------------------------------------------- proposals */
 
 export function Proposals() {
-  const { data, error, loading, mutate } = useAsync<any[]>(() => api("/proposals"), []);
+  const { data, error, loading, reload } = useAsync<any[]>(() => api("/proposals"), []);
   const config = useAsync<any>(() => api("/config"), []);
   const { session } = useSession();
   const [working, setWorking] = React.useState(0);
@@ -96,12 +96,12 @@ export function Proposals() {
 
       let tx;
       if (type === "approve") {
-        tx = await workflow.approve(pid, session.identityId);
+        tx = await workflow.approve(pid, session!.identityId);
       } else {
         tx = await workflow.execute(pid);
       }
       await tx.wait();
-      mutate();
+      reload();
     } catch (e: any) {
       alert(e.message || "Action failed");
     } finally {

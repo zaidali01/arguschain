@@ -21,7 +21,7 @@ function siweMessage(o: {
     `Issued At: ${new Date().toISOString()}`,
   ].join("\n");
 }
-const API = import.meta.env.VITE_API_URL || "/api";
+const API = (import.meta as any).env?.VITE_API_URL || "/api";
 
 /** Wallet errors carry no `detail` — that field belongs to our own API. Reading
  *  only `detail` is what made a MetaMask fault render as a blank policy notice. */
